@@ -1,7 +1,11 @@
-import numpy as np 
+import numpy as np
+import onnx 
+from onnx import helper, TensorProto
 import onnxruntime as ort 
 from PIL import Image
 import os
+
+onnx_path=(f"../models/vgg19_Opset16.onnx")
 
 def preprocess(image):
     if not os.path.exists(image):
@@ -21,14 +25,54 @@ def preprocess(image):
     return img
 
 img=preprocess(f"../images/content/dog.jpg")
-# print(img.shape)
-onnx_path=(f"../models/vgg19_Opset16.onnx")
 
-session = ort.InferenceSession(onnx_path)
+model=onnx.load(onnx_path)
+graph=model.graph
 
+content_output="/features/features.19/Conv_output_0"
+style_output=["/features/features.0/Conv_output_0","/features/features.5/Conv_output_0","/features/features.10/Conv_output_0","/features/features.19/Conv_output_0","/features/features.28/Conv_output_0"]
+
+# outputs=graph.output
+# # print(outputs)
+# node=graph.node
+# print(node)
+
+
+new_output=onnx.helper.make_tensor_value_info(
+    name=content_output,
+    elem_type=TensorProto.FLOAT,
+    shape=None
+)
+
+graph.output.append(new_output)
+
+
+for out in style_output:
+    new_output=onnx.helper.make_tensor_value_info(
+        name=out,
+        elem_type=TensorProto.FLOAT,
+        shape=None
+    )
+    graph.output.append(new_output)
+
+# onnx.save(model,"test.onnx")
+
+
+model_bytes=model.SerializePartialToString()
+session = ort.InferenceSession(model_bytes)
 input_name=session.get_inputs()[0].name
-# print(input_name)
 outputs=session.run(None,{input_name:img})
+print(len(outputs))
+for i in outputs:
+    print(i.shape)
 
 
-# /features/features.21/Conv
+content_reprentation=outputs[1]
+style_1=outputs[2]
+style_2=outputs[3]
+style_3=outputs[4]
+style_4=outputs[5]
+style_5=outputs[6]
+
+
+print(content_reprentation)
