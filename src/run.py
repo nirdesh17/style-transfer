@@ -3,14 +3,10 @@ import onnx
 from onnx import helper, TensorProto
 import onnxruntime as ort 
 from PIL import Image
-import os
-
-onnx_path=(f"../models/vgg19_Opset16.onnx")
+import argparse
 
 def preprocess(image):
-    if not os.path.exists(image):
-        raise OSError("File not found: {}".format(image))
-    img = Image.open(image)
+    img = image
     img = img.resize((256,256))
     img = np.array(img.convert('RGB'))
     img = img / 255.
@@ -24,55 +20,49 @@ def preprocess(image):
     img = np.expand_dims(img, axis=0)
     return img
 
-img=preprocess(f"../images/content/dog.jpg")
-
-model=onnx.load(onnx_path)
-graph=model.graph
-
-content_output="/features/features.19/Conv_output_0"
-style_output=["/features/features.0/Conv_output_0","/features/features.5/Conv_output_0","/features/features.10/Conv_output_0","/features/features.19/Conv_output_0","/features/features.28/Conv_output_0"]
-
-# outputs=graph.output
-# # print(outputs)
-# node=graph.node
-# print(node)
-
-
-new_output=onnx.helper.make_tensor_value_info(
-    name=content_output,
-    elem_type=TensorProto.FLOAT,
-    shape=None
-)
-
-graph.output.append(new_output)
-
-
-for out in style_output:
+def add_output(layer_name,graph):
     new_output=onnx.helper.make_tensor_value_info(
-        name=out,
+        name=layer_name,
         elem_type=TensorProto.FLOAT,
         shape=None
     )
     graph.output.append(new_output)
 
-# onnx.save(model,"test.onnx")
+def run_inference(model_bytes,img):
+    session = ort.InferenceSession(model_bytes)
+    input_name=session.get_inputs()[0].name
+    outputs=session.run(None,{input_name:img})
+    return outputs
 
 
-model_bytes=model.SerializePartialToString()
-session = ort.InferenceSession(model_bytes)
-input_name=session.get_inputs()[0].name
-outputs=session.run(None,{input_name:img})
-print(len(outputs))
-for i in outputs:
-    print(i.shape)
+def main():
+    p=argparse.ArgumentParser()
+    p.add_argument("--content", required=True, help="pass content image")
+    p.add_argument("--style", required=True, help="pass style image")
+    args=p.parse_args()
 
+    try:
+        content_image = preprocess(Image.open(args.content))
+        style_image = preprocess(Image.open(args.style))
+    except Exception as e:
+        print(f"Error opening image: {e}")
+        exit(1)
 
-content_reprentation=outputs[1]
-style_1=outputs[2]
-style_2=outputs[3]
-style_3=outputs[4]
-style_4=outputs[5]
-style_5=outputs[6]
+    onnx_path=(f"../models/vgg19_Opset16.onnx")
+    model=onnx.load(onnx_path)
 
+    graph=model.graph
+    content_output="/features/features.19/Conv_output_0"
+    style_output=["/features/features.0/Conv_output_0","/features/features.5/Conv_output_0","/features/features.10/Conv_output_0","/features/features.19/Conv_output_0","/features/features.28/Conv_output_0"]
 
-print(content_reprentation)
+    add_output(content_output,graph)
+    for out in style_output:
+        add_output(out,graph)
+
+    model_bytes=model.SerializePartialToString()
+
+    out=run_inference(model_bytes,content_image)
+    print(np.argmax(out[0]))
+
+if __name__ == "__main__":
+    main()
