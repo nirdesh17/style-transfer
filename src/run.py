@@ -34,6 +34,8 @@ def run_inference(model_bytes,img):
     outputs=session.run(None,{input_name:img})
     return outputs
 
+def content_loss(ori,gen):
+    return np.sum((ori-gen)**2)//2
 
 def main():
     p=argparse.ArgumentParser()
@@ -61,8 +63,11 @@ def main():
 
     model_bytes=model.SerializePartialToString()
 
-    out=run_inference(model_bytes,content_image)
-    print(np.argmax(out[0]))
+    content_representation=run_inference(model_bytes,content_image)[1]
+    styles_representation=run_inference(model_bytes,style_image)[2:]
+    
+    # print(len(content_representation))
+    # print(len(styles_representation))
 
 if __name__ == "__main__":
     main()
