@@ -4,6 +4,7 @@ from onnx import helper, TensorProto
 import onnxruntime as ort 
 from PIL import Image
 import argparse
+import matplotlib.pyplot as plt
 
 def preprocess(image):
     img = image
@@ -36,6 +37,21 @@ def run_inference(model_bytes,img):
 
 def content_loss(ori,gen):
     return np.sum((ori-gen)**2)//2
+
+def gramm_matrix(arr):
+    arr=np.squeeze(arr, axis=0)
+    C, H, W = arr.shape
+    arr=arr.reshape(C,H*W)
+    return arr @ arr.T
+
+def style_loss(ori,gen):
+    B,C,H,W=ori.shape
+    ori=gramm_matrix(ori)
+    gen=gramm_matrix(gen)
+    return (np.sum((ori-gen)**2)/(4*(B*B)(H*H*W*W)))
+
+def total_style_loss(w,E):
+    return np.sum(w*E)
 
 def main():
     p=argparse.ArgumentParser()
