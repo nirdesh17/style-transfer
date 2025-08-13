@@ -7,6 +7,10 @@ import argparse
 import matplotlib.pyplot as plt
 
 def preprocess(image):
+    if isinstance(image, np.ndarray):
+        if image.dtype != np.uint8:
+            image = (image * 255).astype(np.uint8)
+        image = Image.fromarray(image)
     img = image
     img = img.resize((256,256))
     img = np.array(img.convert('RGB'))
@@ -48,10 +52,13 @@ def style_loss(ori,gen):
     B,C,H,W=ori.shape
     ori=gramm_matrix(ori)
     gen=gramm_matrix(gen)
-    return (np.sum((ori-gen)**2)/(4*(B*B)(H*H*W*W)))
+    return (np.sum((ori-gen)**2)/(4*(B*B)*(H*H*W*W)))
 
 def total_style_loss(w,E):
-    return np.sum(w*E)
+    ans=0
+    for i in range(len(w)):
+        ans=ans+(w[i]*E[i])
+    return ans
 
 def main():
     p=argparse.ArgumentParser()
