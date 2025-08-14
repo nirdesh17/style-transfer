@@ -33,8 +33,7 @@ def add_output(layer_name,graph):
     )
     graph.output.append(new_output)
 
-def run_inference(model_bytes,img):
-    session = ort.InferenceSession(model_bytes)
+def run_inference(session,img):
     input_name=session.get_inputs()[0].name
     outputs=session.run(None,{input_name:img})
     return outputs
@@ -60,11 +59,11 @@ def total_style_loss(w,E):
         ans=ans+(w[i]*E[i])
     return ans
 
-def total_loss(content_representation,styles_representation,noise_img,model_bytes):
+def total_loss(content_representation,styles_representation,noise_img,session):
     wl=[0.5,0.5,0.5,0.5,0.5]
     alpha=8
     beta=10000
-    noise_output=run_inference(model_bytes,noise_img)
+    noise_output=run_inference(session,noise_img)
     noise_content=noise_output[1]
     noise_style=noise_output[2:]
 
@@ -103,16 +102,18 @@ def main():
         add_output(out,graph)
 
     model_bytes=model.SerializePartialToString()
+    session = ort.InferenceSession(model_bytes)
 
-    content_representation=run_inference(model_bytes,content_image)[1]
-    styles_representation=run_inference(model_bytes,style_image)[2:]
+
+    content_representation=run_inference(session,content_image)[1]
+    styles_representation=run_inference(session,style_image)[2:]
     
     # print(len(content_representation))
     # print(len(styles_representation))
     noise_img=np.random.rand(256,256,3)
     noise_img=preprocess(noise_img)
 
-    print(total_loss(content_representation,styles_representation,noise_img,model_bytes))
+    print(total_loss(content_representation,styles_representation,noise_img,session))
 
 if __name__ == "__main__":
     main()
