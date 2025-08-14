@@ -60,6 +60,24 @@ def total_style_loss(w,E):
         ans=ans+(w[i]*E[i])
     return ans
 
+def total_loss(content_representation,styles_representation,noise_img,model_bytes):
+    wl=[0.5,0.5,0.5,0.5,0.5]
+    alpha=8
+    beta=10000
+    noise_output=run_inference(model_bytes,noise_img)
+    noise_content=noise_output[1]
+    noise_style=noise_output[2:]
+
+    loss_content=content_loss(content_representation,noise_content)
+    loss_style=[]
+    for i in range(len(noise_style)):
+        loss_style.append(style_loss(styles_representation[i],noise_style[i]))
+
+    loss_style_total=total_style_loss(wl,loss_style)
+
+    loss_total=(alpha*loss_content)+(beta*loss_style_total)
+    return loss_total
+
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--content", required=True, help="pass content image")
@@ -91,6 +109,10 @@ def main():
     
     # print(len(content_representation))
     # print(len(styles_representation))
+    noise_img=np.random.rand(256,256,3)
+    noise_img=preprocess(noise_img)
+
+    print(total_loss(content_representation,styles_representation,noise_img,model_bytes))
 
 if __name__ == "__main__":
     main()
