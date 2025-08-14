@@ -40,7 +40,7 @@ def run_inference(model_bytes,img):
     return outputs
 
 def content_loss(ori,gen):
-    return np.sum((ori-gen)**2)//2
+    return np.sum((ori-gen)**2)/2
 
 def gramm_matrix(arr):
     arr=np.squeeze(arr, axis=0)
