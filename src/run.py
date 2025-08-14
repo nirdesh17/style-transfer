@@ -52,7 +52,7 @@ def style_loss(ori,gen):
     B,C,H,W=ori.shape
     ori=gramm_matrix(ori)
     gen=gramm_matrix(gen)
-    return (np.sum((ori-gen)**2)/(4*(B*B)*(H*H*W*W)))
+    return (np.sum((ori-gen)**2)/(4*(C*C)*(H*H*W*W)))
 
 def total_style_loss(w,E):
     ans=0
