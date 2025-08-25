@@ -6,6 +6,8 @@ from PIL import Image
 import argparse
 import matplotlib.pyplot as plt
 import torch
+import torch.nn as nn
+import torchvision.models as models
 
 def preprocess(image):
     if torch.is_tensor(image):
@@ -78,6 +80,22 @@ def total_loss(content_representation,styles_representation,noise_img,session):
     loss_total=(alpha*loss_content)+(beta*loss_style_total)
     return loss_total
 
+class VGGFeature(nn.Module):
+    def __init__(self,selected_layers):
+        super(VGGFeature, self).__init__()
+        vgg = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).features
+        self.vgg=vgg.eval()
+        self.selected_layers=selected_layers
+
+    def forward(self, x):
+        features=[]
+        for name, layer in self.vgg._modules.items():
+            x=layer(x)
+            if name in self.selected_layers:
+                features.append(x)
+        return features
+
+
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--content", required=True, help="pass content image")
@@ -91,30 +109,32 @@ def main():
         print(f"Error opening image: {e}")
         exit(1)
 
-    onnx_path=(f"../models/vgg19_Opset16.onnx")
-    model=onnx.load(onnx_path)
+    content_output=["21"]
+    style_output=["0","5","10","19","28"]
 
-    graph=model.graph
-    content_output="/features/features.19/Conv_output_0"
-    style_output=["/features/features.0/Conv_output_0","/features/features.5/Conv_output_0","/features/features.10/Conv_output_0","/features/features.19/Conv_output_0","/features/features.28/Conv_output_0"]
+    model=VGGFeature(selected_layers=content_output+style_output)
 
-    add_output(content_output,graph)
-    for out in style_output:
-        add_output(out,graph)
-
-    model_bytes=model.SerializePartialToString()
-    session = ort.InferenceSession(model_bytes)
+    with torch.no_grad():
+        outputs_content=model(content_image)
+        outputs_style = model(style_image)
 
 
-    content_representation=run_inference(session,content_image)[1]
-    styles_representation=run_inference(session,style_image)[2:]
+    content_representation = outputs_content[4:5]
+    styles_representation = outputs_style[:4] + outputs_style[5:]
+
+    for i in content_representation:
+        print(i.shape)
+    
+    print("--")
+    for i in styles_representation:
+        print(i.shape)
     
     # print(len(content_representation))
     # print(len(styles_representation))
-    noise_img=np.random.rand(256,256,3)
-    noise_img=preprocess(noise_img)
+    # noise_img=np.random.rand(256,256,3)
+    # noise_img=preprocess(noise_img)
 
-    print(total_loss(content_representation,styles_representation,noise_img,session))
+    # print(total_loss(content_representation,styles_representation,noise_img,session))
 
 if __name__ == "__main__":
     main()
