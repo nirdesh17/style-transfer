@@ -12,7 +12,7 @@ import torchvision.models as models
 def preprocess(image):
     if torch.is_tensor(image):
         if image.dtype != torch.uint8:
-            image = (image * 255).astype(torch.uint8)
+            image = (image * 255).to(torch.uint8)
         image = Image.fromarray(image.cpu().numpy())
     img = image
     img = img.resize((256,256))
@@ -62,15 +62,15 @@ def total_style_loss(w,E):
         ans=ans+(w[i]*E[i])
     return ans
 
-def total_loss(content_representation,styles_representation,noise_img,session):
+def total_loss(content_representation,styles_representation,noise_img,model):
     wl=[0.5,0.5,0.5,0.5,0.5]
     alpha=8
     beta=10000
-    noise_output=run_inference(session,noise_img)
-    noise_content=noise_output[1]
-    noise_style=noise_output[2:]
+    noise_output=model(noise_img)
+    noise_content=noise_output[4:5]
+    noise_style = noise_output[:4] + noise_output[5:]
 
-    loss_content=content_loss(content_representation,noise_content)
+    loss_content=content_loss(content_representation[0],noise_content[0])
     loss_style=[]
     for i in range(len(noise_style)):
         loss_style.append(style_loss(styles_representation[i],noise_style[i]))
@@ -121,20 +121,11 @@ def main():
 
     content_representation = outputs_content[4:5]
     styles_representation = outputs_style[:4] + outputs_style[5:]
-
-    for i in content_representation:
-        print(i.shape)
     
-    print("--")
-    for i in styles_representation:
-        print(i.shape)
-    
-    # print(len(content_representation))
-    # print(len(styles_representation))
-    # noise_img=np.random.rand(256,256,3)
+    # noise_img=torch.rand(256,256,3)
     # noise_img=preprocess(noise_img)
 
-    # print(total_loss(content_representation,styles_representation,noise_img,session))
+    # print(total_loss(content_representation,styles_representation,noise_img,model))
 
 if __name__ == "__main__":
     main()
