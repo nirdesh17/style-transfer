@@ -5,24 +5,26 @@ import onnxruntime as ort
 from PIL import Image
 import argparse
 import matplotlib.pyplot as plt
+import torch
 
 def preprocess(image):
-    if isinstance(image, np.ndarray):
-        if image.dtype != np.uint8:
-            image = (image * 255).astype(np.uint8)
-        image = Image.fromarray(image)
+    if torch.is_tensor(image):
+        if image.dtype != torch.uint8:
+            image = (image * 255).astype(torch.uint8)
+        image = Image.fromarray(image.cpu().numpy())
     img = image
     img = img.resize((256,256))
-    img = np.array(img.convert('RGB'))
+    img = torch.tensor(np.array(img.convert('RGB')))
     img = img / 255.
     h, w = img.shape[0], img.shape[1]
     y0 = (h - 224) // 2
     x0 = (w - 224) // 2
     img = img[y0 : y0+224, x0 : x0+224, :]
-    img = (img - [0.485, 0.456, 0.406]) / [0.229, 0.224, 0.225]
-    img = np.transpose(img, axes=[2, 0, 1])
-    img = img.astype(np.float32)
-    img = np.expand_dims(img, axis=0)
+    mean = torch.tensor([0.485, 0.456, 0.406])
+    std = torch.tensor([0.229, 0.224, 0.225])
+    img = (img - mean) / std 
+    img = img.permute(2,0,1)
+    img = img.float().unsqueeze(0)
     return img
 
 def add_output(layer_name,graph):
@@ -39,19 +41,18 @@ def run_inference(session,img):
     return outputs
 
 def content_loss(ori,gen):
-    return np.sum((ori-gen)**2)/2
+    return torch.sum((ori-gen)**2)/2
 
 def gramm_matrix(arr):
-    arr=np.squeeze(arr, axis=0)
-    C, H, W = arr.shape
-    arr=arr.reshape(C,H*W)
-    return arr @ arr.T
+    B, C, H, W = arr.size()
+    arr = arr.view(C, H * W)
+    return arr @ arr.t()
 
 def style_loss(ori,gen):
-    B,C,H,W=ori.shape
+    B,C,H,W=ori.size()
     ori=gramm_matrix(ori)
     gen=gramm_matrix(gen)
-    return (np.sum((ori-gen)**2)/(4*(C*C)*(H*H*W*W)))
+    return (torch.sum((ori-gen)**2)/(4*(C*C)*(H*H*W*W)))
 
 def total_style_loss(w,E):
     ans=0
