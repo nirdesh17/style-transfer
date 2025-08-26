@@ -63,7 +63,7 @@ def total_style_loss(w,E):
     return ans
 
 def total_loss(content_representation,styles_representation,noise_img,model):
-    wl=[0.5,0.5,0.5,0.5,0.5]
+    wl=[0.2,0.2,0.2,0.2,0.2]
     alpha=8
     beta=10000
     noise_output=model(noise_img)
@@ -109,8 +109,8 @@ def main():
         print(f"Error opening image: {e}")
         exit(1)
 
-    content_output=["21"]
-    style_output=["0","5","10","19","28"]
+    content_output=["22"]
+    style_output=["1","6","11","20","29"]
 
     model=VGGFeature(selected_layers=content_output+style_output)
 
