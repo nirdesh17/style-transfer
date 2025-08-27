@@ -109,6 +109,21 @@ def optimize_loop(noise_img,content_representation,styles_representation,model,i
         optimize.step(closure)
     return noise_img
 
+def tensor_to_image(tensor):
+    img = tensor.clone().detach().cpu().squeeze(0)
+
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(3,1,1)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(3,1,1)
+    img = img * std + mean
+
+    img = torch.clamp(img,0,1)
+
+    img = img.permute(1,2,0).numpy()
+
+    img = (img * 255).astype("uint8")
+
+    return Image.fromarray(img)
+
 
 def main():
     p=argparse.ArgumentParser()
@@ -141,7 +156,11 @@ def main():
 
     # print(total_loss(content_representation,styles_representation,noise_img,model))
     noise_img = torch.rand_like(content_image)
-    result = optimize_loop(noise_img,content_representation,styles_representation,model,50)
+    result = optimize_loop(noise_img,content_representation,styles_representation,model,2)
+
+    final_img=tensor_to_image(result)
+
+    final_img.save("final.jpg")
 
 if __name__ == "__main__":
     main()
