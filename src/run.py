@@ -47,7 +47,7 @@ def content_loss(ori,gen):
 
 def gramm_matrix(arr):
     B, C, H, W = arr.size()
-    arr = arr.view(C, H * W)
+    arr = arr.reshape(C, H * W)
     return arr @ arr.t()
 
 def style_loss(ori,gen):
@@ -95,6 +95,20 @@ class VGGFeature(nn.Module):
                 features.append(x)
         return features
 
+def optimize_loop(noise_img,content_representation,styles_representation,model,iter):
+    noise_img = noise_img.clone().detach().contiguous().requires_grad_(True)
+    optimize = torch.optim.LBFGS([noise_img])
+
+    for i in range(iter):
+        def closure():
+            optimize.zero_grad()
+            loss = total_loss(content_representation,styles_representation,noise_img,model)
+            loss.backward()
+            print(f"Iteration {i}, Loss={loss.item():.2f}")
+            return loss
+        optimize.step(closure)
+    return noise_img
+
 
 def main():
     p=argparse.ArgumentParser()
@@ -126,6 +140,8 @@ def main():
     # noise_img=preprocess(noise_img)
 
     # print(total_loss(content_representation,styles_representation,noise_img,model))
+    noise_img = torch.rand_like(content_image)
+    result = optimize_loop(noise_img,content_representation,styles_representation,model,50)
 
 if __name__ == "__main__":
     main()
