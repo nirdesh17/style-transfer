@@ -54,6 +54,8 @@ def style_loss(ori,gen):
     B,C,H,W=ori.size()
     ori=gramm_matrix(ori)
     gen=gramm_matrix(gen)
+    print("style ori",ori)
+    # print("gen",gen)
     return (torch.sum((ori-gen)**2)/(4*(C*C)*(H*H*W*W)))
 
 def total_style_loss(w,E):
@@ -64,11 +66,11 @@ def total_style_loss(w,E):
 
 def total_loss(content_representation,styles_representation,noise_img,model):
     wl=[0.2,0.2,0.2,0.2,0.2]
-    alpha=8
-    beta=10000
+    alpha=1
+    beta=125
     noise_output=model(noise_img)
-    noise_content=noise_output[4:5]
-    noise_style = noise_output[:4] + noise_output[5:]
+    noise_content=noise_output[0:1]
+    noise_style = noise_output[1:]
 
     loss_content=content_loss(content_representation[0],noise_content[0])
     loss_style=[]
@@ -81,19 +83,23 @@ def total_loss(content_representation,styles_representation,noise_img,model):
     return loss_total
 
 class VGGFeature(nn.Module):
-    def __init__(self,selected_layers):
+    def __init__(self,content_output,style_output):
         super(VGGFeature, self).__init__()
         vgg = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).features
         self.vgg=vgg.eval()
-        self.selected_layers=selected_layers
+        self.content_output=content_output
+        self.style_output=style_output
 
     def forward(self, x):
-        features=[]
+        features_content=[]
+        features_style=[]
         for name, layer in self.vgg._modules.items():
             x=layer(x)
-            if name in self.selected_layers:
-                features.append(x)
-        return features
+            if name in self.content_output:
+                features_content.append(x)
+            elif name in self.style_output:
+                features_style.append(x)
+        return features_content + features_style
 
 def optimize_loop(noise_img,content_representation,styles_representation,model,iter):
     noise_img = noise_img.clone().detach().contiguous().requires_grad_(True)
@@ -141,22 +147,23 @@ def main():
     content_output=["22"]
     style_output=["1","6","11","20","29"]
 
-    model=VGGFeature(selected_layers=content_output+style_output)
+    model=VGGFeature(content_output,style_output)
 
     with torch.no_grad():
         outputs_content=model(content_image)
         outputs_style = model(style_image)
 
 
-    content_representation = outputs_content[4:5]
-    styles_representation = outputs_style[:4] + outputs_style[5:]
-    
-    # noise_img=torch.rand(256,256,3)
-    # noise_img=preprocess(noise_img)
+    content_representation = outputs_content[0:1]
+    styles_representation = outputs_style[1:]
 
-    # print(total_loss(content_representation,styles_representation,noise_img,model))
+
+    # print(f"Content Representation shape: {content_representation[0].shape}")
+    # for i in range(len(styles_representation)):
+    #     print(f"Style Representation {i} shape: {styles_representation[i].shape}")
+
     noise_img = torch.rand_like(content_image)
-    result = optimize_loop(noise_img,content_representation,styles_representation,model,2)
+    result = optimize_loop(noise_img,content_representation,styles_representation,model,10)
 
     final_img=tensor_to_image(result)
 
