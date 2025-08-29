@@ -9,6 +9,8 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 def preprocess(image):
     if torch.is_tensor(image):
         if image.dtype != torch.uint8:
@@ -27,7 +29,7 @@ def preprocess(image):
     img = (img - mean) / std 
     img = img.permute(2,0,1)
     img = img.float().unsqueeze(0)
-    return img
+    return img.to(device)
 
 def add_output(layer_name,graph):
     new_output=onnx.helper.make_tensor_value_info(
@@ -54,9 +56,8 @@ def style_loss(ori,gen):
     B,C,H,W=ori.size()
     ori=gramm_matrix(ori)
     gen=gramm_matrix(gen)
-    print("style ori",ori)
-    # print("gen",gen)
-    return (torch.sum((ori-gen)**2)/(4*(C*C)*(H*H*W*W)))
+    M = (H*W)
+    return (torch.sum((ori-gen)**2)/(4*(C**2)*(M**2)))
 
 def total_style_loss(w,E):
     ans=0
@@ -67,10 +68,8 @@ def total_style_loss(w,E):
 def total_loss(content_representation,styles_representation,noise_img,model):
     wl=[0.2,0.2,0.2,0.2,0.2]
     alpha=1
-    beta=125
-    noise_output=model(noise_img)
-    noise_content=noise_output[0:1]
-    noise_style = noise_output[1:]
+    beta=1e5
+    noise_content,noise_style=model(noise_img)
 
     loss_content=content_loss(content_representation[0],noise_content[0])
     loss_style=[]
@@ -86,7 +85,12 @@ class VGGFeature(nn.Module):
     def __init__(self,content_output,style_output):
         super(VGGFeature, self).__init__()
         vgg = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).features
+        for i,layer in enumerate(vgg):
+            if isinstance(layer,nn.ReLU):
+                vgg[i] = nn.ReLU(inplace=False)
         self.vgg=vgg.eval()
+        for p in self.vgg.parameters():
+            p.requires_grad = False
         self.content_output=content_output
         self.style_output=style_output
 
@@ -99,7 +103,7 @@ class VGGFeature(nn.Module):
                 features_content.append(x)
             elif name in self.style_output:
                 features_style.append(x)
-        return features_content + features_style
+        return features_content , features_style
 
 def optimize_loop(noise_img,content_representation,styles_representation,model,iter):
     noise_img = noise_img.clone().detach().contiguous().requires_grad_(True)
@@ -118,8 +122,9 @@ def optimize_loop(noise_img,content_representation,styles_representation,model,i
 def tensor_to_image(tensor):
     img = tensor.clone().detach().cpu().squeeze(0)
 
-    mean = torch.tensor([0.485, 0.456, 0.406]).view(3,1,1)
-    std = torch.tensor([0.229, 0.224, 0.225]).view(3,1,1)
+    mean = torch.tensor([0.485, 0.456, 0.406], device=tensor.device).view(3,1,1)
+    std = torch.tensor([0.229, 0.224, 0.225], device=tensor.device).view(3,1,1)
+
     img = img * std + mean
 
     img = torch.clamp(img,0,1)
@@ -138,32 +143,34 @@ def main():
     args=p.parse_args()
 
     try:
-        content_image = preprocess(Image.open(args.content))
-        style_image = preprocess(Image.open(args.style))
+        content_image = preprocess(Image.open(args.content)).to(device)
+        style_image = preprocess(Image.open(args.style)).to(device)
     except Exception as e:
         print(f"Error opening image: {e}")
         exit(1)
 
     content_output=["22"]
     style_output=["1","6","11","20","29"]
+    # content_output=["21"]
+    # style_output=["0","5","10","19","28"]
 
-    model=VGGFeature(content_output,style_output)
+    model=VGGFeature(content_output,style_output).to(device)
 
     with torch.no_grad():
-        outputs_content=model(content_image)
-        outputs_style = model(style_image)
+        outputs_content,_=model(content_image)
+        _,outputs_style = model(style_image)
 
 
-    content_representation = outputs_content[0:1]
-    styles_representation = outputs_style[1:]
+    content_representation = outputs_content
+    styles_representation = outputs_style
 
-
+    
     # print(f"Content Representation shape: {content_representation[0].shape}")
     # for i in range(len(styles_representation)):
     #     print(f"Style Representation {i} shape: {styles_representation[i].shape}")
 
     noise_img = torch.rand_like(content_image)
-    result = optimize_loop(noise_img,content_representation,styles_representation,model,10)
+    result = optimize_loop(noise_img,content_representation,styles_representation,model,100)
 
     final_img=tensor_to_image(result)
 
