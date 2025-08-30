@@ -17,18 +17,14 @@ def preprocess(image):
             image = (image * 255).to(torch.uint8)
         image = Image.fromarray(image.cpu().numpy())
     img = image
-    img = img.resize((256,256))
-    img = torch.tensor(np.array(img.convert('RGB')))
+    img = img.resize((512,512))
+    img = torch.tensor(np.array(img.convert('RGB')), device=device)
     img = img / 255.
-    h, w = img.shape[0], img.shape[1]
-    y0 = (h - 224) // 2
-    x0 = (w - 224) // 2
-    img = img[y0 : y0+224, x0 : x0+224, :]
-    mean = torch.tensor([0.485, 0.456, 0.406])
-    std = torch.tensor([0.229, 0.224, 0.225])
-    img = (img - mean) / std 
     img = img.permute(2,0,1)
     img = img.float().unsqueeze(0)
+    mean = torch.tensor([0.485, 0.456, 0.406], device=device).view(1, 3, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225], device=device).view(1, 3, 1, 1)
+    img = (img - mean) / std
     return img.to(device)
 
 def add_output(layer_name,graph):
@@ -126,13 +122,9 @@ def tensor_to_image(tensor):
     std = torch.tensor([0.229, 0.224, 0.225], device=tensor.device).view(3,1,1)
 
     img = img * std + mean
-
     img = torch.clamp(img,0,1)
-
     img = img.permute(1,2,0).numpy()
-
     img = (img * 255).astype("uint8")
-
     return Image.fromarray(img)
 
 
@@ -151,8 +143,6 @@ def main():
 
     content_output=["22"]
     style_output=["1","6","11","20","29"]
-    # content_output=["21"]
-    # style_output=["0","5","10","19","28"]
 
     model=VGGFeature(content_output,style_output).to(device)
 
@@ -164,10 +154,6 @@ def main():
     content_representation = outputs_content
     styles_representation = outputs_style
 
-    
-    # print(f"Content Representation shape: {content_representation[0].shape}")
-    # for i in range(len(styles_representation)):
-    #     print(f"Style Representation {i} shape: {styles_representation[i].shape}")
 
     noise_img = torch.rand_like(content_image)
     result = optimize_loop(noise_img,content_representation,styles_representation,model,100)
