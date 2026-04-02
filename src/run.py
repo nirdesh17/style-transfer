@@ -64,7 +64,7 @@ def total_style_loss(w,E):
 def total_loss(content_representation,styles_representation,noise_img,model):
     wl=[0.2,0.2,0.2,0.2,0.2]
     alpha=1
-    beta=1e5
+    beta=1e4
     noise_content,noise_style=model(noise_img)
 
     loss_content=content_loss(content_representation[0],noise_content[0])
@@ -116,22 +116,25 @@ def optimize_loop(noise_img,content_representation,styles_representation,model,i
     return noise_img
 
 def tensor_to_image(tensor):
-    img = tensor.clone().detach().cpu().squeeze(0)
+    img = tensor.clone().detach().squeeze(0)
 
     mean = torch.tensor([0.485, 0.456, 0.406], device=tensor.device).view(3,1,1)
     std = torch.tensor([0.229, 0.224, 0.225], device=tensor.device).view(3,1,1)
 
     img = img * std + mean
     img = torch.clamp(img,0,1)
-    img = img.permute(1,2,0).numpy()
+
+    img = img.cpu().permute(1,2,0).numpy()
     img = (img * 255).astype("uint8")
     return Image.fromarray(img)
+
 
 
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--content", required=True, help="pass content image")
     p.add_argument("--style", required=True, help="pass style image")
+    p.add_argument("--output", required=False, help="output image path", default="../images/outputs/output.jpg")
     args=p.parse_args()
 
     try:
@@ -155,12 +158,13 @@ def main():
     styles_representation = outputs_style
 
 
-    noise_img = torch.rand_like(content_image)
-    result = optimize_loop(noise_img,content_representation,styles_representation,model,100)
+    noise_img = torch.clone(style_image)
+    result = optimize_loop(noise_img,content_representation,styles_representation,model,500)
 
     final_img=tensor_to_image(result)
 
-    final_img.save("final.jpg")
+    final_img.save(args.output)
+    print(f"Output image saved at {args.output}")
 
 if __name__ == "__main__":
     main()
